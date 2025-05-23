@@ -15,6 +15,7 @@ import { nanoid } from 'nanoid';
 import fs from 'fs';
 import dotenv from 'dotenv';
 dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -48,7 +49,6 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 
   try {
-    // Parse expiryHours from form data (it will be a string)
     const expiryHours = parseInt(req.body.expiryHours, 10);
     let expiresAt = null;
     if (!isNaN(expiryHours) && expiryHours > 0) {
@@ -61,7 +61,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       fileUrl: azureFileUrl,
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
-      expiresAt, // send expiry to client for reference
+      expiresAt,
     });
   } catch (error) {
     console.error("Azure upload failed:", error);
@@ -100,7 +100,7 @@ io.on('connection', (socket) => {
         sender: message.sender,
         type: message.type,
         timestamp: message.timestamp,
-        encrypted: !!message.encrypted, // Ensure encrypted flag is saved
+        encrypted: !!message.encrypted,
       };
 
       if (message.type === 'text') {
@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
       }
 
       const saved = await Message.create(messageData);
-      io.to(roomId).emit('receive-message', saved); // Emit to all clients in the room, including sender
+      io.to(roomId).emit('receive-message', saved);
     } catch (err) {
       console.error('❌ Error saving message:', err);
       socket.emit('error-message', { error: 'Failed to save message.' });
@@ -130,29 +130,26 @@ io.on('connection', (socket) => {
 async function deleteExpiredFilesAndRooms() {
   await dbConnect();
   const now = new Date();
-  // Delete expired files
   const expiredFiles = await Message.find({ type: 'file', expiresAt: { $lte: now } });
   const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
   const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_STORAGE_CONTAINER_NAME);
 
   for (const file of expiredFiles) {
     try {
-      const blobName = file.fileName; // or however you store the blob name
+      const blobName = file.fileName;
       await containerClient.deleteBlob(blobName);
       await file.deleteOne();
       console.log(`Deleted expired file: ${blobName}`);
     } catch (err) {
       if (err.statusCode !== 404) {
         console.error('Failed to delete blob:', err);
-      } // else ignore 404
+      }
     }
   }
 
-  // Delete expired rooms and their messages/files
   const expiredRooms = await Room.find({ expiresAt: { $lte: now } });
   for (const room of expiredRooms) {
     try {
-      // Delete all messages for this room
       const roomMessages = await Message.find({ roomId: room.code });
       for (const msg of roomMessages) {
         if (msg.type === 'file' && msg.fileName) {
@@ -161,7 +158,7 @@ async function deleteExpiredFilesAndRooms() {
           } catch (err) {
             if (err.statusCode !== 404) {
               console.error('Failed to delete file blob for expired room:', err);
-            } // else ignore 404
+            }
           }
         }
         await msg.deleteOne();
@@ -173,7 +170,6 @@ async function deleteExpiredFilesAndRooms() {
     }
   }
 
-  // Delete rooms with no members (optional, if you want to keep this logic)
   const emptyRooms = await Room.find({ members: { $size: 0 } });
   for (const room of emptyRooms) {
     try {
@@ -185,7 +181,6 @@ async function deleteExpiredFilesAndRooms() {
   }
 }
 
-// Run every hour
 let isCleaning = false;
 setInterval(async () => {
   if (isCleaning) return;
@@ -196,11 +191,13 @@ setInterval(async () => {
     isCleaning = false;
   }
 }, 60 * 60 * 1000);
-// Also run once at startup
+
+// ✅ FIXED IIFE
 (async () => {
   await deleteExpiredFilesAndRooms(); // Run cleanup on startup
 
-const PORT = 4000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+  const PORT = 4000;
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+})();
