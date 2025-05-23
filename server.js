@@ -197,9 +197,11 @@ setInterval(async () => {
   }
 }, 60 * 60 * 1000);
 // Also run once at startup
-await deleteExpiredFilesAndRooms();
+(async () => {
+  await deleteExpiredFilesAndRooms(); // Run cleanup on startup
 
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+  const PORT = process.env.PORT || 4000;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+})();
