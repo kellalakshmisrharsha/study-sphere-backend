@@ -43,6 +43,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/messages', messageRoutes);
 
 // API for file uploads
+app.get('/', (req, res) => {
+  res.send('Backend is live');
+});
+
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
